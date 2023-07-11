@@ -1,6 +1,6 @@
 //vue.config.js
 module.exports = {
   publicPath: process.env.NODE_ENV === 'production'
-    ? '/flowvisualization_texturePolymorphism/index.html'
+    ? '/flowvisualization_texturePolymorphism/dist'
     : '/'
 }
