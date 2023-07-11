@@ -14,4 +14,8 @@ export default defineConfig({
   server: {
     host: '0.0.0.0'
   },
+  base: "/flowVisualization_texturePolymorphism/",
+  build: {
+    outDir: "docs"
+  }
 })
