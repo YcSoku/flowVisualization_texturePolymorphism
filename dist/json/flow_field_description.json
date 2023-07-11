@@ -1,0 +1,97 @@
+{
+    "area_masks": [
+        "/images/mask_100.png",
+        "/images/mask_101.png",
+        "/images/mask_102.png",
+        "/images/mask_103.png",
+        "/images/mask_104.png",
+        "/images/mask_105.png",
+        "/images/mask_106.png",
+        "/images/mask_107.png",
+        "/images/mask_108.png",
+        "/images/mask_109.png",
+        "/images/mask_110.png",
+        "/images/mask_111.png",
+        "/images/mask_112.png",
+        "/images/mask_113.png",
+        "/images/mask_114.png",
+        "/images/mask_115.png",
+        "/images/mask_116.png",
+        "/images/mask_117.png",
+        "/images/mask_118.png",
+        "/images/mask_119.png",
+        "/images/mask_120.png",
+        "/images/mask_121.png",
+        "/images/mask_122.png",
+        "/images/mask_123.png",
+        "/images/mask_124.png",
+        "/images/mask_125.png",
+        "/images/mask_126.png"
+    ],
+    "constraints": {
+        "max_drop_rate": 0.1,
+        "max_drop_rate_bump": 0.2,
+        "max_segment_num": 16,
+        "max_streamline_num": 1048576,
+        "max_texture_size": 4096
+    },
+    "extent": [
+        0.8334519409367115,
+        0.4087464036632672,
+        0.8388303296774701,
+        0.40586521884815613
+    ],
+    "flow_boundary": {
+        "u_max": 2.3461,
+        "u_min": -2.1176,
+        "v_max": 2.0175,
+        "v_min": -1.8959
+    },
+    "flow_fields": [
+        "/images/uv_100.png",
+        "/images/uv_101.png",
+        "/images/uv_102.png",
+        "/images/uv_103.png",
+        "/images/uv_104.png",
+        "/images/uv_105.png",
+        "/images/uv_106.png",
+        "/images/uv_107.png",
+        "/images/uv_108.png",
+        "/images/uv_109.png",
+        "/images/uv_110.png",
+        "/images/uv_111.png",
+        "/images/uv_112.png",
+        "/images/uv_113.png",
+        "/images/uv_114.png",
+        "/images/uv_115.png",
+        "/images/uv_116.png",
+        "/images/uv_117.png",
+        "/images/uv_118.png",
+        "/images/uv_119.png",
+        "/images/uv_120.png",
+        "/images/uv_121.png",
+        "/images/uv_122.png",
+        "/images/uv_123.png",
+        "/images/uv_124.png",
+        "/images/uv_125.png",
+        "/images/uv_126.png"
+    ],
+    "projection": {
+        "2D": "/images/projection.png",
+        "3D": "/images/projection_3D.png"
+    },
+    "texture_size": {
+        "area_mask": [
+            1024,
+            558
+        ],
+        "flow_field": [
+            1024,
+            558
+        ],
+        "projection": [
+            1024,
+            2048
+        ]
+    }
+}
