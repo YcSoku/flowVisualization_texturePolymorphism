@@ -32,8 +32,8 @@
         "max_drop_rate": 0.1,
         "max_drop_rate_bump": 0.2,
         "max_segment_num": 16,
-        "max_streamline_num": 1048576,
-        "max_texture_size": 4096
+        "max_streamline_num": 262144,
+        "max_texture_size": 2048
     },
     "extent": [
         0.8334519409367115,
