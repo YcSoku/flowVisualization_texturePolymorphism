@@ -25,10 +25,16 @@ async function loadShader_url(gl: WebGL2RenderingContext, name: string, vertexUr
     const vertexSource = await axios.get(vertexUrl)
     .then((response) => {
         return response.data;
+    })
+    .catch((error) => {
+        console.log("ERROR::SHADER_NOT_LOAD_BY_URL", error.toJSON());
     });
     const fragmentSource = await axios.get(fragmentUrl)
     .then((response) => {
         return response.data;
+    })
+    .catch((error) => {
+        console.log("ERROR::SHADER_NOT_LOAD_BY_URL", error.toJSON());
     });
 
     return new Shader(gl, name, [vertexSource, fragmentSource], transformFeedbackVaryings);
@@ -67,11 +73,8 @@ class ParticleSystem {
 
     private updateShader: Shader | null;
 
-    public _jump = false;
-
     // Render variable
     public beginBlock = -1.0;
-    private streamline = 262144;
     private maxBlockSize = 0.0;
     private _timeCount = 0.0;
     private timeLast = 10.0;
@@ -89,6 +92,7 @@ class ParticleSystem {
     private uboMapBuffer: Float32Array;
     private flowBoundary: Array<number>;
     private textureArraySize = 0;
+    public _doJump = false;
     public isSuspended = false;
 
     public u_matrix: number[];
@@ -99,10 +103,10 @@ class ParticleSystem {
     public lifeData: Float32Array;
 
     public aliveLineNum = 0.0;
-    public lineNum = 65536 * 4;
+    public trajectoryNum = 65536;
     public segmentNum = 16;
     public fullLife = this.segmentNum * 10;
-    public maxLineNum = this.lineNum;
+    public maxTrajectoryNum = this.trajectoryNum;
     public _progressRate = 0.0;
     public speedFactor = 2.0;
     public dropRate = 0.003;
@@ -110,8 +114,8 @@ class ParticleSystem {
     public fillWidth = 1.0;
     public aaWidth = 1.0;
     public zoomRate = 1.0;
-    public primitive = "trajectory"
-    public isSteady = false;
+    public primitive = 1
+    public isUnsteady = true;
 
     constructor() {
         this.updateShader = null;
@@ -143,19 +147,15 @@ class ParticleSystem {
         this.uboMapBuffer[11] = this.flowBoundary[3];
  
         // Prepare descriptive variables
-        this.maxLineNum = parser.maxTrajectoryNum;
+        this.maxTrajectoryNum = parser.maxTrajectoryNum;
         this.segmentNum = parser.maxSegmentNum;
-        this.maxBlockSize = Math.ceil(Math.sqrt(this.maxLineNum));
+        this.maxBlockSize = Math.ceil(Math.sqrt(this.maxTrajectoryNum));
         this.flowFieldTextureSize = parser.flowFieldTextureSize;
         this.seedingTextureSize = parser.seedingTextureSize;
 
-        // Load textures of flow fields
+        // Arrays of resource urls
         this.flowFieldResourceArray = parser.flowFieldResourceArray;
         this.seedingResourceArray = parser.seedingResourceArray;
-    }
-
-    async resourcePrepare() {
-
     }
 
     async Prepare() {
@@ -189,10 +189,11 @@ class ParticleSystem {
         });
 
         this.phaseCount = this.flowFieldResourceArray.length; // the last one is a phase from the end to the head
-        this.timeLast = this.phaseCount * 30; // 300 frame per timePoint
+        this.timeLast = this.phaseCount * 300; // 300 frame per timePoint
         this.textureArraySize = 3;
         for (let i = 0; i < this.textureArraySize; i++) {
-
+            
+            // Load textures of flow fields
             const fID = stm.SetTexture(stm.AddTextureView(f32TextureViewInfo), lSampler);
             this.flowfieldTextureArray[i] = fID;
             await stm.FillTextureDataByImage(fID, 0, this.flowFieldResourceArray[i], this.flowFieldTextureSize[0], this.flowFieldTextureSize[1]);
@@ -205,21 +206,21 @@ class ParticleSystem {
 
         // Set data of particle block used to fill simulation buffer and particle pool texture
         this.particleMapBuffer = new Float32Array(this.maxBlockSize * this.maxBlockSize * 3).fill(0);
-        for (let i = 0; i < this.maxLineNum; i++) {
+        for (let i = 0; i < this.maxTrajectoryNum; i++) {
             this.particleMapBuffer[i * 3 + 0] = rand(0, 1.0);
             this.particleMapBuffer[i * 3 + 1] = rand(0, 1.0);
-            this.particleMapBuffer[i * 3 + 2] = 0.0;
+            this.particleMapBuffer[i * 3 + 2] = rand(0, 1.0);
         }
 
         // Set life for particles
-        const particleCountdownArray = new Float32Array(this.maxLineNum);
-        for (let i = 0; i < this.maxLineNum; i++) {
+        const particleCountdownArray = new Float32Array(this.maxTrajectoryNum);
+        for (let i = 0; i < this.maxTrajectoryNum; i++) {
             particleCountdownArray[i] = this.fullLife;
         }
 
         // Set worker message containers
-        this.lifeData = new Float32Array(this.maxLineNum);
-        this.aliveIndexData = new Float32Array(this.maxLineNum);
+        this.lifeData = new Float32Array(this.maxTrajectoryNum);
+        this.aliveIndexData = new Float32Array(this.maxTrajectoryNum);
 
         // Set Buffer used to simulation
         this.simulationBuffer = makeBufferBySource(gl, gl.ARRAY_BUFFER, this.particleMapBuffer, gl.DYNAMIC_DRAW)!;
@@ -283,7 +284,6 @@ class ParticleSystem {
         // console.log(timePoint % this.flowFieldResourceArray.length)
         stm.UpdateDataByImage(this.flowfieldTextureArray[texturePoint], this.flowFieldResourceArray[timePoint], 0);
         stm.UpdateDataByImage(this.seedingTextureArray[texturePoint], this.seedingResourceArray[timePoint], 0);
-        gl.finish();
     }
 
     set timeCount(value: number) {
@@ -295,40 +295,45 @@ class ParticleSystem {
     }
 
     set progressRate(value: number) {
-        if (stm.IsBusy()) {
-            return;
-        }
 
         const lastPhase = Math.floor(this._progressRate * this.phaseCount);
-        const currentPhase =  Math.floor(value * this.phaseCount);
-        const nextPhase = (currentPhase + 1) % this.phaseCount;
+        const currentPhase =  Math.floor(value * this.phaseCount) % this.phaseCount;
+        const nextPhase = (currentPhase + 2) % this.phaseCount;
+
         this._progressRate = value;
+
+        this.flowFieldTextureInfo = this.getFieldTextures();
+        this.seedingTextureInfo = this.getMaskTextures();
+        this.uboMapBuffer[0] = this.getProgressBetweenTexture();
         
-        // Update texture for nextPhase
+        // Update texture for next nextPhase
         if (currentPhase != lastPhase) {
-            this.resourceLoad((nextPhase + 1) % this.textureArraySize, (nextPhase + 1) % this.phaseCount);
+            this.resourceLoad(nextPhase % this.textureArraySize, nextPhase);
         }
-        else {
-            if (this.isSteady)
-                this.timeCount += 1;
-        }
+
     }
 
-    getFieldTextures(progressRate: number) {
-
-        const currentPhase = Math.floor(progressRate * this.phaseCount);
-        return [this.flowfieldTextureArray[currentPhase % this.textureArraySize], this.flowfieldTextureArray[(currentPhase + 1) % this.textureArraySize]];
+    get progressRate() {
+        return this._progressRate;
     }
 
-    getMaskTextures(progressRate: number) {
+    getFieldTextures() {
 
-        const currentPhase = Math.floor(progressRate * this.phaseCount);
-        return [this.seedingTextureArray[currentPhase % this.textureArraySize], this.seedingTextureArray[(currentPhase + 1) % this.textureArraySize]];
+        const currentPhase = Math.floor(this.progressRate * this.phaseCount);
+        const nextPhase = (currentPhase + 1) % this.phaseCount;
+        return [this.flowfieldTextureArray[currentPhase % this.textureArraySize], this.flowfieldTextureArray[nextPhase % this.textureArraySize]];
     }
 
-    getProgressBetweenTexture(progressRate: number) {
+    getMaskTextures() {
 
-        const progress = progressRate * this.phaseCount;
+        const currentPhase = Math.floor(this.progressRate * this.phaseCount);
+        const nextPhase = (currentPhase + 1) % this.phaseCount;
+        return [this.seedingTextureArray[currentPhase % this.textureArraySize], this.seedingTextureArray[nextPhase % this.textureArraySize]];
+    }
+
+    getProgressBetweenTexture() {
+
+        const progress = this.progressRate * this.phaseCount;
         return progress - Math.floor(progress);
     }
 
@@ -339,6 +344,7 @@ class ParticleSystem {
     }
 
     async swap() {
+
         if (this.beginBlock % 2 == 0)
         {
             this.sVAO = this.simulationVAO;
@@ -351,28 +357,27 @@ class ParticleSystem {
             this.unPackBuffer = this.xfSimulationBuffer;
             this.lifeDataBuffer = this.xfLifeBuffer;
         }
-
-        this.flowFieldTextureInfo = this.getFieldTextures(this._progressRate);
-        this.seedingTextureInfo = this.getMaskTextures(this._progressRate);
     }
 
     tickLogicCount() {
 
-        this.progressRate = this.timeCount / this.timeLast;
-        this.beginBlock = (this.beginBlock + 1) % this.segmentNum;
         this.swap();
+        this.beginBlock = (this.beginBlock + 1) % this.segmentNum;
 
-        this.uboMapBuffer[0] = this.getProgressBetweenTexture(this._progressRate);
+        if (this.isUnsteady && (!stm.IsBusy())) {
+            this.progressRate = this.timeCount / this.timeLast;
+            this.timeCount = (this.timeCount + 1) % (this.timeLast + 1);
+
+        }
+
         this.uboMapBuffer[1] = this.segmentNum;
         this.uboMapBuffer[2] = this.segmentNum * 10;
         this.uboMapBuffer[3] = this.dropRate;
         this.uboMapBuffer[4] = this.dropRateBump;
         this.uboMapBuffer[5] = this.speedFactor * 0.01 * 100;
-        
-        this.streamline = this.lineNum;
     }
 
-    tickRender(deltaTime = 0) {
+    tickRender() {
         
         this.bindUBO(gl, 0);
 
@@ -389,7 +394,7 @@ class ParticleSystem {
 
         gl.enable(gl.RASTERIZER_DISCARD);
         gl.beginTransformFeedback(gl.POINTS);
-        gl.drawArrays(gl.POINTS, 0, this.streamline);
+        gl.drawArrays(gl.POINTS, 0, this.trajectoryNum);
         gl.endTransformFeedback();
         gl.disable(gl.RASTERIZER_DISCARD);
 
@@ -398,28 +403,32 @@ class ParticleSystem {
 
         // Pass 1 - Operation 2: Get simulation data
         gl.bindBuffer(gl.ARRAY_BUFFER, this.unPackBuffer);
-        gl.getBufferSubData(gl.ARRAY_BUFFER, 0, this.particleMapBuffer, 0, this.particleMapBuffer.length);
+        gl.getBufferSubData(gl.ARRAY_BUFFER, 0, this.particleMapBuffer, 0, this.trajectoryNum * 3);
 
         // Pass 1 - Operation 3: Get life data
         gl.bindBuffer(gl.ARRAY_BUFFER, this.lifeDataBuffer);
-        gl.getBufferSubData(gl.ARRAY_BUFFER, 0, this.lifeData, 0, this.lineNum);
-        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        gl.getBufferSubData(gl.ARRAY_BUFFER, 0, this.lifeData, 0, this.trajectoryNum);
 
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
         gl.finish();
 
         // Pass 1 - Operation 4: Get alive data
         this.aliveLineNum = 0;
-        if (this.primitive == "trajectory") {
-            for (let i = 0; i < this.lineNum; i++) {
+        // Alive data for trajectories
+        if (this.primitive == 1) {
+            for (let i = 0; i < this.trajectoryNum; i++) {
                 if (this.lifeData[i] < this.segmentNum * 10) {
                     this.aliveIndexData[this.aliveLineNum] = i;
+                    // lifeBuffer[this.aliveLineNum] = i;
                     this.aliveLineNum += 1;
                 }
             }
         }
+        // Alive data for points
         else {
-            for (let i = 0; i < this.lineNum; i++) {
+            for (let i = 0; i < this.trajectoryNum; i++) {
                 if (this.lifeData[i] < this.segmentNum * 9) {
+                    // lifeBuffer[this.aliveLineNum] = i;
                     this.aliveIndexData[this.aliveLineNum] = i;
                     this.aliveLineNum += 1;
                 }
@@ -454,27 +463,33 @@ onmessage = async function(e) {
             if (particleSystem.isSuspended) {
                 break;
             }
+            
             particleSystem.tickLogicCount();
             particleSystem.tickRender();
+            e.data[1] = particleSystem.particleMapBuffer.buffer;
+            e.data[2] = particleSystem.aliveIndexData;
             this.postMessage([1, particleSystem.beginBlock, particleSystem.particleMapBuffer, particleSystem.aliveLineNum, particleSystem.aliveIndexData]);
             break;
         case 2:
-            particleSystem.lineNum = e.data[1].lineNum;
+            particleSystem.trajectoryNum = e.data[1].lineNum;
             particleSystem.fullLife = e.data[1].fullLife;
             particleSystem.speedFactor = e.data[1].speedFactor;
             particleSystem.dropRate = e.data[1].dropRate;
             particleSystem.dropRateBump = e.data[1].dropRateBump;
             particleSystem.fillWidth = e.data[1].fillWidth;
             particleSystem.aaWidth = e.data[1].aaWidth;
-            particleSystem.primitive = e.data[1].primitive;
-            particleSystem.isSteady = e.data[1].isSteady;
+            particleSystem.isUnsteady = e.data[1].isUnsteady;
+            if (e.data[1].primitive == "trajectory")
+                particleSystem.primitive = 1;
+            else
+                particleSystem.primitive = 0;
             break;
         case 3:
             particleSystem.progressRate = e.data[1];
-            particleSystem._jump = true;
             break;
         case 4:
             particleSystem.isSuspended = e.data[1];
+            break;
     }
 
 }

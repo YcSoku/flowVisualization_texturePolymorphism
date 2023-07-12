@@ -71,6 +71,9 @@ class DescriptionParser {
             this.transformTextureSize[0] = response.data["texture_size"]["projection"][0];
             this.transformTextureSize[1] = response.data["texture_size"]["projection"][1];
 
+        })
+        .catch((error) => {
+            console.log("ERROR::RESOURCE_NOT_LOAD_BY_URL", error.toJSON());
         });
     }
 
@@ -153,11 +156,17 @@ export class FlowFieldManager {
                     break;
                 case 1:
                     if (ffManager.isSuspended) return;
+                    ffManager.aliveWorker.postMessage([1]);
                     ffManager.effectElement.GPUMemoryUpdate(e.data[1], e.data[2], e.data[3], e.data[4]);
-                    ffManager.effectElement.needSimulate = true;
                     break;
             }
         }
+
+        // Set mapbox as the default platform
+        ffManager.aliveWorker.postMessage([4, true]);
+        ffManager.isSuspended = true;
+        ffManager.platformIndex = 1;
+        ffManager.InitMap();
 
         return ffManager;
     }
@@ -174,24 +183,6 @@ export class FlowFieldManager {
 
         // Initialize the GUI
         const gui = new GUI;
-        const ffFolder = gui.addFolder('Flow Fields');
-        ffFolder.add(ffController, 'isSteady', false).onChange(()=>{this.updateWorkerSetting = true});
-        ffFolder.add(ffController, 'progressRate', 0.0, 1.0, 0.001).onChange(()=>{this.updateProgress = true});
-        ffFolder.add(ffController, 'speedFactor', 0.0, 10.0, 0.001).onChange(()=>{this.updateWorkerSetting = true});
-        ffFolder.add(ffController, 'dropRate', 0.0, MAX_DORP_RATE, 0.001).onChange(()=>{this.updateWorkerSetting = true});
-        ffFolder.add(ffController, 'dropRateBump', 0.0, MAX_DORP_RATE_BUMP, 0.001).onChange(()=>{this.updateWorkerSetting = true});
-        ffFolder.open();
-        const slFolder = gui.addFolder('Trajectory');
-        slFolder.add(ffController, 'lineNum', 1, MAX_STREAMLINE_NUM, 1.0).onChange(()=>{this.updateWorkerSetting = true});
-        slFolder.add(ffController, 'segmentNum', 1, MAX_SEGMENT_NUM, 1.0).onChange(()=>{this.updateWorkerSetting = true});
-        slFolder.add(ffController, 'fillWidth', 0.0, 30.0, 0.001).onChange(()=>{this.updateWorkerSetting = true});
-        slFolder.add(ffController, 'aaWidth', 0.0, 30.0, 0.001).onChange(()=>{this.updateWorkerSetting = true});
-        slFolder.open();
-        const contentFolder = gui.addFolder('Rendering content');
-        // contentFolder.add(ffController, 'content', ["none", "particle pool"]).onChange(()=>{this.updateWorkerSetting = true});
-        contentFolder.add(ffController, 'colorScheme', [0, 1, 2]).onChange(()=>{this.updateWorkerSetting = true});
-        contentFolder.add(ffController, 'primitive', ["trajectory", "point"]).onChange(()=>{this.updateWorkerSetting = true});
-        contentFolder.open();
         const platformFolder = gui.addFolder("Platform");
         platformFolder.add(ffController, 'platform', ["none", "mapbox", "cesium"]).onChange(()=>{
             switch (this.controller!.platform) {
@@ -225,6 +216,30 @@ export class FlowFieldManager {
             }
         });
         platformFolder.open();
+        const ffFolder = gui.addFolder('Flow Fields');
+        ffFolder.add(ffController, 'isUnsteady', true).onChange(()=>{this.updateWorkerSetting = true});
+        // ffFolder.add(ffController, 'progressRate', 0.0, 1.0, 0.001).onFinishChange(()=>{this.updateProgress = true});
+        ffFolder.add(ffController, 'speedFactor', 0.0, 10.0, 0.001).onChange(()=>{this.updateWorkerSetting = true});
+        ffFolder.add(ffController, 'dropRate', 0.0, MAX_DORP_RATE, 0.001).onChange(()=>{this.updateWorkerSetting = true});
+        ffFolder.add(ffController, 'dropRateBump', 0.0, MAX_DORP_RATE_BUMP, 0.001).onChange(()=>{this.updateWorkerSetting = true});
+        ffFolder.open();
+        const slFolder = gui.addFolder('Trajectory');
+        slFolder.add(ffController, 'lineNum', 1, MAX_STREAMLINE_NUM, 1.0).onChange(()=>{this.updateWorkerSetting = true});
+        slFolder.add(ffController, 'segmentNum', 1, MAX_SEGMENT_NUM, 1.0).onChange(()=>{this.updateWorkerSetting = true});
+        slFolder.add(ffController, 'fillWidth', 0.0, 30.0, 0.001).onChange(()=>{this.updateWorkerSetting = true});
+        slFolder.add(ffController, 'aaWidth', 0.0, 30.0, 0.001).onChange(()=>{this.updateWorkerSetting = true});
+        slFolder.open();
+        const contentFolder = gui.addFolder('Rendering content');
+        // contentFolder.add(ffController, 'content', ["none", "particle pool"]).onChange(()=>{this.updateWorkerSetting = true});
+        contentFolder.add(ffController, 'colorScheme', [0, 1, 2]).onChange(()=>{this.updateWorkerSetting = true});
+        contentFolder.add(ffController, 'primitive', ["trajectory", "point"]).onChange(()=>{
+            this.updateWorkerSetting = true;
+            if (ffController.primitive == "trajectory")
+                this.effectElement.primitive = 1.0;
+            else
+                this.effectElement.primitive = 0.0;
+        });
+        contentFolder.open();
         
     }
 

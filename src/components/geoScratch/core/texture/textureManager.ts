@@ -45,6 +45,26 @@ export class TextureManager {
             this.sampler_array[index] = null;
         });
     }
+
+    Empty() {
+        for (let index = 0; index < this.texture_array.length; index++) {
+            if (this.texture_array[index] != null) {
+                this.texture_array[index]?.texture.textureView.Delete(this.rc!);
+                this.texture_array[index] = null;
+            }
+        }
+        for (let index = 0; index < this.sampler_array.length; index++) {
+            if (this.sampler_array[index] != null){
+                this.sampler_array[index]?.Delete(this.rc!);
+                this.sampler_array[index] = null;
+            }
+        }
+        for (let index = 0; index < this.textureView_array.length; index++) {
+            if (this.textureView_array[index] != null) {
+                this.textureView_array[index] = null;
+            }
+        }
+    }
     
     AddTextureView(info: TextureViewInfo): number {
         let findEmpty = false;
@@ -139,26 +159,6 @@ export class TextureManager {
         this.texture_array[index] = null;
 
         return true;
-    }
-
-    Empty() {
-        for (let index = 0; index < this.texture_array.length; index++) {
-            if (this.texture_array[index] != null) {
-                this.texture_array[index]?.texture.textureView.Delete(this.rc!);
-                this.texture_array[index] = null;
-            }
-        }
-        for (let index = 0; index < this.sampler_array.length; index++) {
-            if (this.sampler_array[index] != null){
-                this.sampler_array[index]?.Delete(this.rc!);
-                this.sampler_array[index] = null;
-            }
-        }
-        for (let index = 0; index < this.textureView_array.length; index++) {
-            if (this.textureView_array[index] != null) {
-                this.textureView_array[index] = null;
-            }
-        }
     }
 
     BindTexture(textureIDs: Array<number>, units: Array<number>): void {

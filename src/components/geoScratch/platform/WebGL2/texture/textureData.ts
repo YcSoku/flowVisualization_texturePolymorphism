@@ -72,6 +72,7 @@ export class TextureData implements TextureDataInfo {
     }
     
     async FillByImage(rc: WebGL2RenderingContext, level: number, url: string, width: number, height: number) {
+        this.masterManager.Lock();
                     
         this.width = width;
         this.height = height;
@@ -82,47 +83,54 @@ export class TextureData implements TextureDataInfo {
         
         const format = Scratch_GL_Data_Formats[this.format];
         const that = this;
-        const worker = new Worker();
         let _flip: ImageOrientation = "from-image";
 
         if (that.flip) {
-            rc.pixelStorei(rc.UNPACK_FLIP_Y_WEBGL, true);
             _flip = "flipY"
         }
 
-        axios.get(url, {responseType: "blob"})
-        .then((response) => {
-            if (format.dataType === "Float_Point") {
-                    worker.postMessage([response.data, _flip]);
-                    worker.onmessage = function(e) {
+        if (format.dataType === "Float_Point") {
+            const worker = new Worker();
+            worker.postMessage([0, url, _flip]);
+            worker.onmessage = function(e) {
 
-                        rc.bindTexture(that.target, that.ID);
-                        rc.texSubImage2D(that.target, level, 0, 0, width, height, format.format, format.type, new Float32Array(e.data));
-                        rc.pixelStorei(rc.UNPACK_FLIP_Y_WEBGL, false);
-                
-                        if (that.mipLevels > 1) {
-                            rc.generateMipmap(that.target);
-                        }
+                rc.bindTexture(that.target, that.ID);
+                rc.texSubImage2D(that.target, level, 0, 0, width, height, format.format, format.type, new Float32Array(e.data));
+        
+                if (that.mipLevels > 1) {
+                    rc.generateMipmap(that.target);
+                }
 
-                        rc.bindTexture(that.target, null);
-                        worker.terminate();
-                    }
+                rc.bindTexture(that.target, null);
+                rc.finish();
+
+                worker.postMessage([1]);
+                worker.terminate();
+                that.masterManager.Unlock();
             }
-            else {
+        }
+        else {
+            axios.get(url, {responseType: "blob"})
+            .then((response) => {
                 createImageBitmap(response.data, {imageOrientation: _flip, premultiplyAlpha: "none", colorSpaceConversion: "default"})
                     .then((imageBitmap) => {
                         rc.bindTexture(that.target, that.ID);
                         rc.texSubImage2D(that.target, level, 0, 0, width, height, format.format, format.type, imageBitmap);
-                        rc.pixelStorei(rc.UNPACK_FLIP_Y_WEBGL, false);
                 
                         if (that.mipLevels > 1) {
                             rc.generateMipmap(that.target);
                         }
 
                         rc.bindTexture(that.target, null);
+                        rc.finish();
+                        that.masterManager.Unlock();
                     });
                 }
-        });
+            )
+            .catch((error) => {
+                console.log("ERROR::TEXTURE_NOT_LOAD_BY_URL", error.toJSON());
+            });
+        }
     }
 
     FillByData(rc: WebGL2RenderingContext, level: number,  width: number, height: number, data: ArrayBufferView) {
@@ -159,48 +167,54 @@ export class TextureData implements TextureDataInfo {
 
         const format = Scratch_GL_Data_Formats[this.format];
         const that = this;
-        const worker = new Worker();
         let _flip: ImageOrientation = "from-image";
         if (that.flip) {
-            rc.pixelStorei(rc.UNPACK_FLIP_Y_WEBGL, true);
             _flip = "flipY"
         }
 
-        axios.get(url, {responseType: "blob"})
-        .then((response) => {
-            if (format.dataType === "Float_Point") {
-                    worker.postMessage([response.data, _flip]);
-                    worker.onmessage = function(e) {
+        if (format.dataType === "Float_Point") {
+            const worker = new Worker();
+            worker.postMessage([0, url, _flip]);
+            worker.onmessage = function(e) {
 
-                        rc.bindTexture(that.target, that.ID);
-                        rc.texSubImage2D(that.target, level, 0, 0, that.width, that.height, format.format, format.type, new Float32Array(e.data));
-                        rc.pixelStorei(rc.UNPACK_FLIP_Y_WEBGL, false);
-                
-                        if (that.mipLevels > 1) {
-                            rc.generateMipmap(that.target);
-                        }
+                rc.bindTexture(that.target, that.ID);
+                // rc.pixelStorei(rc.UNPACK_FLIP_Y_WEBGL, true);
+                rc.texSubImage2D(that.target, level, 0, 0, that.width, that.height, format.format, format.type, new Float32Array(e.data));
+        
+                if (that.mipLevels > 1) {
+                    rc.generateMipmap(that.target);
+                }
 
-                        rc.bindTexture(that.target, null);
-                        worker.terminate();
-                        that.masterManager.Unlock();
-                    }
+                rc.bindTexture(that.target, null);
+                rc.finish();
+
+                worker.postMessage([1]);
+                worker.terminate();
+                that.masterManager.Unlock();
             }
-            else {
+        }
+        else {
+            axios.get(url, {responseType: "blob"})
+            .then((response) => {
                 createImageBitmap(response.data, {imageOrientation: _flip, premultiplyAlpha: "none", colorSpaceConversion: "default"})
                     .then((imageBitmap) => {
                         rc.bindTexture(that.target, that.ID);
                         rc.texSubImage2D(that.target, level, 0, 0, that.width, that.height, format.format, format.type, imageBitmap);
-                        rc.pixelStorei(rc.UNPACK_FLIP_Y_WEBGL, false);
                 
                         if (that.mipLevels > 1) {
                             rc.generateMipmap(that.target);
                         }
 
                         rc.bindTexture(that.target, null);
+                        rc.finish();
                         that.masterManager.Unlock();
                     });
                 }
-        });
+            )
+            .catch((error) => {
+                console.log("ERROR::TEXTURE_NOT_LOAD_BY_URL", error.toJSON());
+            });
+        };
     }
 
     Bind(rc: WebGL2RenderingContext, unit: number) {

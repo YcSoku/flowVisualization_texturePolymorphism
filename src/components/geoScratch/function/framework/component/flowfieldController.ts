@@ -19,7 +19,7 @@ export class FlowFieldController {
     fillWidth: number;
     aaWidth: number;
     colorScheme: number;
-    isSteady: boolean;
+    isUnsteady: boolean;
     content: string;
     primitive: string;
     platform: string;
@@ -27,7 +27,7 @@ export class FlowFieldController {
     constraints: FlowFieldConstraints;
     
     constructor(constraints?: FlowFieldConstraints) {
-        this.lineNum = 65536 * 4;
+        this.lineNum = 65536;
         this.segmentNum = 16;
         this.fullLife = this.segmentNum * 10;
         this.progressRate = 0.0;
@@ -35,12 +35,12 @@ export class FlowFieldController {
         this.dropRate = 0.003;
         this.dropRateBump = 0.001;
         this.fillWidth = 1.0;
-        this.aaWidth = 1.0;
+        this.aaWidth = 2.0;
         this.colorScheme = 0;
-        this.isSteady = false;
+        this.isUnsteady = true;
         this.content = "none";
         this.primitive = "trajectory"
-        this.platform = "none";
+        this.platform = "mapbox";
 
         this["lineNum"] = this.lineNum;
 

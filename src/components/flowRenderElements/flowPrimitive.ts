@@ -2,7 +2,6 @@ import * as Cesium from 'cesium';
 import { ScratchDataFormat } from '../geoScratch/platform/dataFormat';
 import { textureManager } from '../geoScratch/core/managers';
 import axios from 'axios';
-import { FlowFieldController, type FlowFieldConstraints } from '../geoScratch/function/framework/component/flowfieldController';
 import pixelWorker from "../geoScratch/platform/WebGL2/texture/readPixels.worker?worker";
 import type { FlowFieldManager } from './flowfield';
 
@@ -14,10 +13,16 @@ async function loadShader_url(context: any, vertexUrl: string, fragmentUrl: stri
     const vertexSource = await axios.get(vertexUrl)
     .then((response) => {
         return response.data;
+    })
+    .catch((error) => {
+        console.log("ERROR::SHADER_NOT_LOAD_BY_URL", error.toJSON());
     });
     const fragmentSource = await axios.get(fragmentUrl)
     .then((response) => {
         return response.data;
+    })
+    .catch((error) => {
+        console.log("ERROR::SHADER_NOT_LOAD_BY_URL", error.toJSON());
     });
 
     return (Cesium as any).ShaderProgram.fromCache({
@@ -41,7 +46,6 @@ export class FlowFieldPrimitive {
     private maxBlockColumn: number;
     private flowBoundary: Array<number>;
     private textureOffsetArray: Array<TextureOffset>;
-    private ready = false;
 
     // Render variable
     private beginBlock = 0.0;
@@ -63,10 +67,10 @@ export class FlowFieldPrimitive {
     private renderState: any;
 
     public zoomRate = 1.0;
-    public workerPreparing = false;
     public updateWorkerSetting = true;
-    public segmentPrepare = 0;
+    public segmentPrepare = -1;
     public isSuspended = false;
+    public primitive = 1.0;
 
 constructor(public ffManager: FlowFieldManager, scene?: any) {
 
@@ -83,34 +87,30 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
 
         const that = this;
         const worker = new pixelWorker();
+        worker.postMessage([0, url, "flipY"]);
+        worker.onmessage = function(e) {
 
-        await axios.get(url, {responseType: "blob"})
-        .then(async (response) => {
-
-            worker.postMessage([response.data, "flipY"]);
-            worker.onmessage = function(e) {
-
-                that.transformTexture = new (Cesium as any).Texture({
-                    context: that.context,
+            that.transformTexture = new (Cesium as any).Texture({
+                context: that.context,
+                width: width,
+                height: height,
+                source: {
                     width: width,
                     height: height,
-                    source: {
-                        width: width,
-                        height: height,
-                        arrayBufferView: new Float32Array(e.data)
-                    },
-                    pixelFormat: (Cesium.PixelFormat as any).RGB,
-                    pixelDatatype: Cesium.PixelDatatype.FLOAT,
-                    flipY: false,
-                    sampler: new (Cesium as any).Sampler({
-                        minificationFilter: Cesium.TextureMinificationFilter.LINEAR,
-                        magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR
-                    })
-                });
-                that.preparing = false;
-                worker.terminate();
-            }
-        });
+                    arrayBufferView: new Float32Array(e.data)
+                },
+                pixelFormat: (Cesium.PixelFormat as any).RGB,
+                pixelDatatype: Cesium.PixelDatatype.FLOAT,
+                flipY: false,
+                sampler: new (Cesium as any).Sampler({
+                    minificationFilter: Cesium.TextureMinificationFilter.LINEAR,
+                    magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR
+                })
+            });
+            that.preparing = false;
+            worker.postMessage([1]);
+            worker.terminate();
+        }
     }
 
     async Prepare(frameState: any) {
@@ -119,8 +119,10 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
         const that = this;
 
         // Set worker
-        if (!this.ffManager.workerOK)
-            this.ffManager.aliveWorker.postMessage([0]);
+        if (!this.ffManager.workerOK) {
+            console.log("ERROR::ALIVE_WORKER_IS_NOT_PREPARED");
+            return false;
+        }
 
         // Get boundaries of flow speed
         this.flowBoundary = this.ffManager.parser.flowBoundary;
@@ -247,9 +249,6 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
             }
         });
 
-        this.ffManager.aliveWorker.postMessage([4, false]);
-        this.ffManager.isSuspended = false;
-
         this.drawCommand = new (Cesium as any).DrawCommand({
             vertexArray: that.renderVAO,
             instanceCount: that.aliveLineNum,
@@ -259,26 +258,24 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
             pass: (Cesium as any).Pass.OPAQUE
         });
 
+        this.ffManager.isSuspended = false;
+        this.ffManager.aliveWorker.postMessage([4, false]);
         this.ffManager.aliveWorker.postMessage([1]);
+        
         return true;
     }
 
     async update(frameState: any) {
-        if (this.preparing)
+        if (this.preparing || this.segmentPrepare >= 0)
             return;
 
         if (!this.drawCommand ) {
-            this.ready = await this.Prepare(frameState);
+            await this.Prepare(frameState);
             return;
         }
 
-        if (this.segmentPrepare >= 0) {
-            return;
-        }
-
-        this.drawCommand.instanceCount = this.aliveLineNum;
-
-        if (this.ffManager.controller?.primitive == "trajectory") {
+        // Update drawCommand
+        if (this.primitive) {
             this.drawCommand.count = (this.segmentNum - 1) * 2;
             this.drawCommand.shaderProgram = this.trajectoryShader;
         }
@@ -286,7 +283,7 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
             this.drawCommand.count = 4;
             this.drawCommand.shaderProgram = this.pointShader;
         }
-        
+        this.drawCommand.instanceCount = this.aliveLineNum;
         frameState.commandList.push(this.drawCommand);
 
         if (this.ffManager.debug) {
@@ -319,7 +316,7 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
 
         this.trajectoryIndexBuffer.copyFromArrayView(trajectoryBuffer, 0);
 
-        this.ffManager.aliveWorker.postMessage([1]);
+        // this.ffManager.aliveWorker.postMessage([1]);
         this.scene.requestRender();
         this.segmentPrepare--;
     }

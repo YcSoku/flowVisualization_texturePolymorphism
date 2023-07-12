@@ -26,10 +26,16 @@ async function loadShader_url(gl: WebGL2RenderingContext, name: string, vertexUr
     const vertexSource = await axios.get(vertexUrl)
     .then((response) => {
         return response.data;
+    })
+    .catch((error) => {
+        console.log("ERROR::SHADER_NOT_LOAD_BY_URL", error.toJSON());
     });
     const fragmentSource = await axios.get(fragmentUrl)
     .then((response) => {
         return response.data;
+    })
+    .catch((error) => {
+        console.log("ERROR::SHADER_NOT_LOAD_BY_URL", error.toJSON());
     });
 
     return new Shader(gl, name, [vertexSource, fragmentSource], transformFeedbackVaryings);
@@ -78,14 +84,12 @@ class FlowLayer extends CustomLayer {
     private textureOffsetArray: Array<TextureOffset>;
 
     // Render variable
-    private segmentPrepare = 0.0;
+    private segmentPrepare = -1;
     private beginBlock = 0.0;
     private aliveLineNum = 0.0;
     private segmentNum = 0.0;
     private projTextureInfo = 0.0;
-    private particlePool = 0;
-    private canvasWitdh = 0.0;
-    private canvasHeight = 0.0;
+    private trajectoryPool = 0;
     private rc: WebGL2RenderingContext|null = null;
 
     public zoomRate = 1.0;
@@ -93,6 +97,7 @@ class FlowLayer extends CustomLayer {
     public workerParserOK = false;
     public updateWorkerSetting = true;
     public updateProgress = false;
+    public primitive = 1.0;
 
 
     constructor(
@@ -112,11 +117,10 @@ class FlowLayer extends CustomLayer {
 
         this.rc = gl;
 
-        // Set worker
-        this.canvasWitdh = gl.canvas.width;
-        this.canvasHeight = gl.canvas.height;
+        // Determine worker status
         if (!this.ffManager.workerOK) {
-            this.ffManager.aliveWorker.postMessage([0]);
+            console.log("ERROR::ALIVE_WORKER_IS_NOT_PREPARED");
+            return false;
         }
 
         const f32TextureViewInfo: TextureViewInfo = {
@@ -194,10 +198,10 @@ class FlowLayer extends CustomLayer {
             viewType: gl.TEXTURE_2D,
             format: stf.R32G32B32_SFLOAT
         });
-        this.particlePool = stm.SetTexture(tv, nSampler);
+        this.trajectoryPool = stm.SetTexture(tv, nSampler);
 
         for (let i = 0; i < MAX_SEGMENT_NUM; i++) {
-            stm.UpdateDataBySource(this.particlePool, 0, this.textureOffsetArray[i].offsetX, this.textureOffsetArray[i].offsetY, this.maxBlockSize, this.maxBlockSize, this.particleMapBuffer);
+            stm.UpdateDataBySource(this.trajectoryPool, 0, this.textureOffsetArray[i].offsetX, this.textureOffsetArray[i].offsetY, this.maxBlockSize, this.maxBlockSize, this.particleMapBuffer);
         }
 
         // Set Vertex Array Object
@@ -220,10 +224,11 @@ class FlowLayer extends CustomLayer {
         gl.bindVertexArray(null);
 
         this.segmentPrepare = MAX_SEGMENT_NUM;
-        this.ffManager.aliveWorker.postMessage([4, false]);
-        this.ffManager.isSuspended = false;
 
+        this.ffManager.isSuspended = false;
+        this.ffManager.aliveWorker.postMessage([4, false]);
         this.ffManager.aliveWorker.postMessage([1]);
+
         return true;
     }
 
@@ -231,14 +236,14 @@ class FlowLayer extends CustomLayer {
         this.beginBlock = beginBlock;
         this.aliveLineNum = aliveLineNum;
 
-        stm.UpdateDataBySource(this.particlePool, 0, this.textureOffsetArray[this.beginBlock].offsetX, this.textureOffsetArray[this.beginBlock].offsetY, this.maxBlockSize, this.maxBlockSize, trajectoryBlock);
+        stm.UpdateDataBySource(this.trajectoryPool, 0, this.textureOffsetArray[this.beginBlock].offsetX, this.textureOffsetArray[this.beginBlock].offsetY, this.maxBlockSize, this.maxBlockSize, trajectoryBlock);
 
         this.rc!.bindBuffer(this.rc!.ARRAY_BUFFER, this.trajectoryIndexBuffer);
         this.rc!.bufferSubData(this.rc!.ARRAY_BUFFER, 0, trajectoryBuffer);
         this.rc!.bindBuffer(this.rc!.ARRAY_BUFFER, null);
         this.segmentPrepare -= 1;
 
-        this.ffManager.aliveWorker.postMessage([1]);
+        // this.ffManager.aliveWorker.postMessage([1]);
         this.map?.triggerRepaint();
     }
 
@@ -271,13 +276,14 @@ class FlowLayer extends CustomLayer {
         // Pass 1 - Operation 1: Rendering
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.bindVertexArray(this.renderVAO);
-        stm.BindTexture([this.particlePool, this.projTextureInfo], [0, 1]);
+        stm.BindTexture([this.trajectoryPool, this.projTextureInfo], [0, 1]);
 
-        if (this.ffManager.controller!.primitive == "trajectory") {
-            gl.enable(gl.BLEND);
-            gl.blendColor(0.0, 0.0, 0.0, 0.0);
-            gl.blendEquation(gl.FUNC_ADD);
-            gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.enable(gl.BLEND);
+        gl.blendColor(0.0, 0.0, 0.0, 0.0);
+        gl.blendEquation(gl.FUNC_ADD);
+        gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+        if (this.primitive) {
             this.trajectoryShader!.use();
             this.trajectoryShader!.setInt("particlePool", 0);
             this.trajectoryShader!.setInt("projectionTexture", 1);
@@ -291,18 +297,8 @@ class FlowLayer extends CustomLayer {
             this.trajectoryShader!.setUniformBlock("FlowFieldUniforms", 0);
 
             gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, (this.segmentNum - 1) * 2, this.aliveLineNum);
-            gl.disable(gl.DEPTH_TEST);
-            gl.disable(gl.BLEND);
-
-            gl.bindVertexArray(null);
-            gl.bindTexture(gl.TEXTURE_2D, null);
-            gl.bindBuffer(gl.ARRAY_BUFFER, null);
         }
         else {
-            gl.enable(gl.BLEND);
-            gl.blendColor(0.0, 0.0, 0.0, 0.0);
-            gl.blendEquation(gl.FUNC_ADD);
-            gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             this.pointShader!.use();
             this.pointShader!.setInt("particlePool", 0);
             this.pointShader!.setInt("projectionTexture", 1);
@@ -316,19 +312,13 @@ class FlowLayer extends CustomLayer {
             this.pointShader!.setUniformBlock("FlowFieldUniforms", 0);
 
             gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.aliveLineNum);
-            gl.disable(gl.DEPTH_TEST);
-            gl.disable(gl.BLEND);
-
-            gl.bindVertexArray(null);
-            gl.bindTexture(gl.TEXTURE_2D, null);
-            gl.bindBuffer(gl.ARRAY_BUFFER, null);
         }
 
-        // Debug
-        if (this.ffManager.debug) {
+        gl.disable(gl.DEPTH_TEST);
+        gl.disable(gl.BLEND);
 
-            this.debug(gl);
-        }
+        gl.bindVertexArray(null);
+        gl.bindTexture(gl.TEXTURE_2D, null);
     }
 
     debug(gl: WebGL2RenderingContext) {
@@ -339,7 +329,7 @@ class FlowLayer extends CustomLayer {
             gl.enable(gl.BLEND);
             gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
             this.poolShader!.use();
-            stm.BindTexture([this.particlePool], [0]);
+            stm.BindTexture([this.trajectoryPool], [0]);
             this.poolShader!.setFloat2("viewport", window.innerWidth, window.innerHeight);
             this.poolShader!.setInt("textureBuffer", 0);
             gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, 1);
@@ -357,21 +347,9 @@ class FlowLayer extends CustomLayer {
     }
 
     render(gl: WebGL2RenderingContext, u_matrix: number[]) {
-        if(this.ready === false || this.ffManager.workerOK === false) {
+        if(!this.ready || !this.ffManager.workerOK || this.segmentPrepare >= 0) {
             console.log("manager not ready !");
             return;
-        }
-        if (this.segmentPrepare >= 0) {
-            return;
-        }
-
-        this.ffManager.zoomRate = (this.map!.getZoom()) / (this.map!.getMaxZoom());
-        if(this.ffManager.zoomRate <= 0.3) {
-            this.ffManager.zoomRate = 10.0 / (3.0 * this.ffManager.zoomRate);
-        } else if (this.ffManager.zoomRate <=0.7) {
-            this.ffManager.zoomRate = 1.0;
-        } else {
-            this.ffManager.zoomRate = -10.0 / (3.0 * this.ffManager.zoomRate) + 10.0 / 3.0;
         }
 
         // rendering
@@ -380,6 +358,7 @@ class FlowLayer extends CustomLayer {
 
         if (this.ffManager.debug) {
             this.ffManager.stats.update();
+            // this.debug(gl);
         }
     }
 
