@@ -1,4 +1,4 @@
-# A geometry-based method for flow-field visualization using texture polymorphism
+# flow
 
 This template should help get you started developing with Vue 3 in Vite.
 

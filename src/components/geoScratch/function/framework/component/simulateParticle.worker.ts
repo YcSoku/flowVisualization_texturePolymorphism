@@ -92,19 +92,16 @@ class ParticleSystem {
     private uboMapBuffer: Float32Array;
     private flowBoundary: Array<number>;
     private textureArraySize = 0;
-    public _doJump = false;
     public isSuspended = false;
-
-    public u_matrix: number[];
-    public terminate = false;
 
     public particleMapBuffer: Float32Array;
     public aliveIndexData: Float32Array;
     public lifeData: Float32Array;
 
     public aliveLineNum = 0.0;
-    public trajectoryNum = 65536;
-    public segmentNum = 16;
+    public trajectoryNum = 10000;
+    public segmentNum = 8;
+    public maxSegmentNum = 0;
     public fullLife = this.segmentNum * 10;
     public maxTrajectoryNum = this.trajectoryNum;
     public _progressRate = 0.0;
@@ -113,7 +110,6 @@ class ParticleSystem {
     public dropRateBump = 0.001;
     public fillWidth = 1.0;
     public aaWidth = 1.0;
-    public zoomRate = 1.0;
     public primitive = 1
     public isUnsteady = true;
 
@@ -121,7 +117,6 @@ class ParticleSystem {
         this.updateShader = null;
 
         this.flowBoundary = [];
-        this.u_matrix = [];
 
         this.uboMapBuffer = new Float32Array(12);
         this.lifeData = new Float32Array(0);
@@ -148,6 +143,7 @@ class ParticleSystem {
  
         // Prepare descriptive variables
         this.maxTrajectoryNum = parser.maxTrajectoryNum;
+        this.maxSegmentNum = parser.maxSegmentNum;
         this.segmentNum = parser.maxSegmentNum;
         this.maxBlockSize = Math.ceil(Math.sqrt(this.maxTrajectoryNum));
         this.flowFieldTextureSize = parser.flowFieldTextureSize;
@@ -277,7 +273,7 @@ class ParticleSystem {
         gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
 
         // Build Shaders
-        this.updateShader = await loadShader_url(gl, "update", "/shaders/update.vert", "/shaders/update.frag", ['newInfo', 'aliveTime'])!;
+        this.updateShader = await loadShader_url(gl, "update", "https://ycsoku.github.io/FFV_Database/shaders/update.vert", "https://ycsoku.github.io/FFV_Database/shaders/update.frag", ['newInfo', 'aliveTime'])!;
     }
 
     resourceLoad(texturePoint: number, timePoint: number) {
@@ -361,12 +357,12 @@ class ParticleSystem {
 
     tickLogicCount() {
 
+        this.beginBlock = (this.beginBlock + 1) % this.maxSegmentNum;
         this.swap();
-        this.beginBlock = (this.beginBlock + 1) % this.segmentNum;
 
         if (this.isUnsteady && (!stm.IsBusy())) {
             this.progressRate = this.timeCount / this.timeLast;
-            this.timeCount = (this.timeCount + 1) % (this.timeLast + 1);
+            this.timeCount = this.timeCount + 1;
 
         }
 
@@ -415,7 +411,7 @@ class ParticleSystem {
         // Pass 1 - Operation 4: Get alive data
         this.aliveLineNum = 0;
         // Alive data for trajectories
-        if (this.primitive == 1) {
+        if (this.primitive == 0) {
             for (let i = 0; i < this.trajectoryNum; i++) {
                 if (this.lifeData[i] < this.segmentNum * 10) {
                     this.aliveIndexData[this.aliveLineNum] = i;
@@ -479,10 +475,7 @@ onmessage = async function(e) {
             particleSystem.fillWidth = e.data[1].fillWidth;
             particleSystem.aaWidth = e.data[1].aaWidth;
             particleSystem.isUnsteady = e.data[1].isUnsteady;
-            if (e.data[1].primitive == "trajectory")
-                particleSystem.primitive = 1;
-            else
-                particleSystem.primitive = 0;
+            particleSystem.primitive = e.data[1].primitive;
             break;
         case 3:
             particleSystem.progressRate = e.data[1];

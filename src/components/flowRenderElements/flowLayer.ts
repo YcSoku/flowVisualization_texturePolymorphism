@@ -92,12 +92,10 @@ class FlowLayer extends CustomLayer {
     private trajectoryPool = 0;
     private rc: WebGL2RenderingContext|null = null;
 
-    public zoomRate = 1.0;
     public workerOK = false;
     public workerParserOK = false;
     public updateWorkerSetting = true;
     public updateProgress = false;
-    public primitive = 1.0;
 
 
     constructor(
@@ -215,9 +213,9 @@ class FlowLayer extends CustomLayer {
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
 
         // Build Shaders
-        this.trajectoryShader = await loadShader_url(gl, "draw", "/shaders/ribbonParticle.trajectory.vert", "/shaders/ribbonParticle.trajectory.frag");
-        this.pointShader = await loadShader_url(gl, "draw", "/shaders/ribbonParticle.point.vert", "/shaders/ribbonParticle.point.frag");
-        this.poolShader = await loadShader_url(gl, "textureDebug", "/shaders/showPool.vert", "/shaders/showPool.frag");
+        this.trajectoryShader = await loadShader_url(gl, "draw", "https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle.trajectory.vert", "https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle.trajectory.frag");
+        this.pointShader = await loadShader_url(gl, "draw", "https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle.point.vert", "https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle.point.frag");
+        this.poolShader = await loadShader_url(gl, "textureDebug", "https://ycsoku.github.io/FFV_Database/shaders/showPool.vert", "https://ycsoku.github.io/FFV_Database/shaders/showPool.frag");
 
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
@@ -243,7 +241,6 @@ class FlowLayer extends CustomLayer {
         this.rc!.bindBuffer(this.rc!.ARRAY_BUFFER, null);
         this.segmentPrepare -= 1;
 
-        // this.ffManager.aliveWorker.postMessage([1]);
         this.map?.triggerRepaint();
     }
 
@@ -283,7 +280,7 @@ class FlowLayer extends CustomLayer {
         gl.blendEquation(gl.FUNC_ADD);
         gl.blendFuncSeparate(gl.ONE, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-        if (this.primitive) {
+        if (this.ffManager.controller!.primitive == 0) {
             this.trajectoryShader!.use();
             this.trajectoryShader!.setInt("particlePool", 0);
             this.trajectoryShader!.setInt("projectionTexture", 1);

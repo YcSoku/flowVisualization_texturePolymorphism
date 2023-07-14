@@ -12,13 +12,13 @@
     import "mapbox-gl/dist/mapbox-gl.css";
 
 
-    async function renderFlowInMap() {
+    async function flowFieldVisualizing() {
 
         // Set FPS monitor
         let stats = new (Stats as any)();
 
         // Initialize the flow field manager
-        const ffManager = await FlowFieldManager.Create("/json/flow_field_description.json", stats);
+        const ffManager = await FlowFieldManager.Create("https://ycsoku.github.io/FFV_Database/json/flow_field_description.json", stats);
         if (ffManager.debug = false) {
             const container = document.getElementById('stats'); 
             container?.appendChild( stats.dom );
@@ -26,7 +26,7 @@
     }
 
     onMounted(async()=> {
-        await renderFlowInMap();
+        await flowFieldVisualizing();
 
     });
 </script>

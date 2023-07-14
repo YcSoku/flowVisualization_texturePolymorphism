@@ -3,13 +3,14 @@ import Worker from "../geoScratch/function/framework/component/simulateParticle.
 import { FlowFieldController, type FlowFieldConstraints } from '../geoScratch/function/framework/component/flowfieldController';
 import { GUI } from 'dat.gui';
 import { FlowLayer } from '@/components/flowRenderElements/flowLayer';
+import { FlowLayer_Direct } from '@/components/flowRenderElements/flowLayer_noWorker';
 import { GetMap } from '@/components/flowRenderElements/customLayer';
 import * as Cesium from 'cesium';
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { FlowFieldPrimitive } from '@/components/flowRenderElements/flowPrimitive';
 
 // The URL on your server where CesiumJS's static files are hosted.
-(window as unknown as any).CESIUM_BASE_URL = '/Cesium/';
+(window as unknown as any).CESIUM_BASE_URL = 'https://ycsoku.github.io/FFV_Database/Cesium/';
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiMDI3MWQ0ZS1jYWEzLTQ3NDAtYjFjNS1jN2E3MTQ0NjExY2QiLCJpZCI6MTI5MTI0LCJpYXQiOjE2NzkwMjE4MzJ9.rDh09EkzwIQCcU2xy3AWuWz89xpadqI5Bb52pzAoTYg';
 
 class DescriptionParser {
@@ -165,8 +166,8 @@ export class FlowFieldManager {
         // Set mapbox as the default platform
         ffManager.aliveWorker.postMessage([4, true]);
         ffManager.isSuspended = true;
-        ffManager.platformIndex = 1;
-        ffManager.InitMap();
+        ffManager.platformIndex = 0;
+        ffManager.InitMap(false);
 
         return ffManager;
     }
@@ -184,30 +185,36 @@ export class FlowFieldManager {
         // Initialize the GUI
         const gui = new GUI;
         const platformFolder = gui.addFolder("Platform");
-        platformFolder.add(ffController, 'platform', ["none", "mapbox", "cesium"]).onChange(()=>{
+        platformFolder.add(ffController, 'platform', ["mapbox no worker", "mapbox", "cesium"]).onChange(()=>{
             switch (this.controller!.platform) {
-                case "none":
+
+                case "mapbox no worker":
                     this.aliveWorker.postMessage([4, true]);
                     this.isSuspended = true;
                     if (this.platformIndex == 1)
                         this.DestroyMap();
-                    else if (this.platformIndex == 2)
+                    if (this.platformIndex == 2)
                         this.DestroyGlobe();
                     this.platformIndex = 0;
+                    this.InitMap(false);
                     break;
 
                 case "mapbox":
                     this.aliveWorker.postMessage([4, true]);
                     this.isSuspended = true;
+                    if (this.platformIndex == 0)
+                        this.DestroyMap();
                     if (this.platformIndex == 2)
                         this.DestroyGlobe();
                     this.platformIndex = 1;
-                    this.InitMap();
+                    this.InitMap(true);
                     break;
 
                 case "cesium":
                     this.aliveWorker.postMessage([4, true]);
                     this.isSuspended = true;
+                    if (this.platformIndex == 0)
+                        this.DestroyMap();
                     if (this.platformIndex == 1)
                         this.DestroyMap();
                     this.platformIndex = 2;
@@ -232,18 +239,16 @@ export class FlowFieldManager {
         const contentFolder = gui.addFolder('Rendering content');
         // contentFolder.add(ffController, 'content', ["none", "particle pool"]).onChange(()=>{this.updateWorkerSetting = true});
         contentFolder.add(ffController, 'colorScheme', [0, 1, 2]).onChange(()=>{this.updateWorkerSetting = true});
-        contentFolder.add(ffController, 'primitive', ["trajectory", "point"]).onChange(()=>{
-            this.updateWorkerSetting = true;
-            if (ffController.primitive == "trajectory")
-                this.effectElement.primitive = 1.0;
-            else
-                this.effectElement.primitive = 0.0;
-        });
+        contentFolder.add(ffController, 'primitive', [0, 1]).onChange(()=>{this.updateWorkerSetting = true});
         contentFolder.open();
         
     }
 
-    ExportAsLayer() {
+    ExportAsLayer(useWorker: boolean) {
+        if (!useWorker) {
+            this.effectElement = new FlowLayer_Direct("flow", "2d", this);
+            return this.effectElement;
+        }
         this.effectElement = new FlowLayer("flow", "2d", this);
         return this.effectElement;
     }
@@ -254,7 +259,7 @@ export class FlowFieldManager {
         return this.effectElement;
     }
 
-    InitMap() {
+    InitMap(useWorker: boolean) {
         // Initialize map
         this.platform = GetMap(
             "pk.eyJ1IjoieWNzb2t1IiwiYSI6ImNrenozdWdodDAza3EzY3BtdHh4cm5pangifQ.ZigfygDi2bK4HXY1pWh-wg",
@@ -271,7 +276,7 @@ export class FlowFieldManager {
         );
 
         this.platform.on("load", () => {
-            this.platform.addLayer(this.ExportAsLayer());
+            this.platform.addLayer(this.ExportAsLayer(useWorker));
         });
     }
 

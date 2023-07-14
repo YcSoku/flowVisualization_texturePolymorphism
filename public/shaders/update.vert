@@ -34,7 +34,7 @@ float rand(const vec2 co) {
 float drop(float velocity, vec2 uv)
 {
     vec2 seed = (particleInfo.xy + uv) * randomSeed;
-    float drop_rate = dropRate - velocity * dropRateBump;
+    float drop_rate = dropRate + velocity * dropRateBump;
     return step(drop_rate, rand(seed));
 }
 

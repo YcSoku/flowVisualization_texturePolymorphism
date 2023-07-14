@@ -66,11 +66,9 @@ export class FlowFieldPrimitive {
     private uniformMap: any;
     private renderState: any;
 
-    public zoomRate = 1.0;
     public updateWorkerSetting = true;
     public segmentPrepare = -1;
     public isSuspended = false;
-    public primitive = 1.0;
 
 constructor(public ffManager: FlowFieldManager, scene?: any) {
 
@@ -226,8 +224,8 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
             }
         }
 
-        this.trajectoryShader = await loadShader_url(this.context,"/shaders/ribbonParticle_3D.trajectory.vert", "/shaders/ribbonParticle_3D.trajectory.frag");
-        this.pointShader = await loadShader_url(this.context,"/shaders/ribbonParticle_3D.point.vert", "/shaders/ribbonParticle_3D.point.frag");
+        this.trajectoryShader = await loadShader_url(this.context,"https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle_3D.trajectory.vert", "https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle_3D.trajectory.frag");
+        this.pointShader = await loadShader_url(this.context,"https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle_3D.point.vert", "https://ycsoku.github.io/FFV_Database/shaders/ribbonParticle_3D.point.frag");
 
         this.renderState = (Cesium as any).RenderState.fromCache({
             cull: {
@@ -275,7 +273,7 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
         }
 
         // Update drawCommand
-        if (this.primitive) {
+        if (this.ffManager.controller!.primitive == 0) {
             this.drawCommand.count = (this.segmentNum - 1) * 2;
             this.drawCommand.shaderProgram = this.trajectoryShader;
         }
@@ -316,7 +314,6 @@ constructor(public ffManager: FlowFieldManager, scene?: any) {
 
         this.trajectoryIndexBuffer.copyFromArrayView(trajectoryBuffer, 0);
 
-        // this.ffManager.aliveWorker.postMessage([1]);
         this.scene.requestRender();
         this.segmentPrepare--;
     }

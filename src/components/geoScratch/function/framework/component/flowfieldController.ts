@@ -21,14 +21,14 @@ export class FlowFieldController {
     colorScheme: number;
     isUnsteady: boolean;
     content: string;
-    primitive: string;
+    primitive: number;
     platform: string;
 
     constraints: FlowFieldConstraints;
     
     constructor(constraints?: FlowFieldConstraints) {
-        this.lineNum = 65536;
-        this.segmentNum = 16;
+        this.lineNum = 10000;
+        this.segmentNum = 8;
         this.fullLife = this.segmentNum * 10;
         this.progressRate = 0.0;
         this.speedFactor = 2.0;
@@ -39,8 +39,8 @@ export class FlowFieldController {
         this.colorScheme = 0;
         this.isUnsteady = true;
         this.content = "none";
-        this.primitive = "trajectory"
-        this.platform = "mapbox";
+        this.primitive = 0;
+        this.platform = "mapbox no worker";
 
         this["lineNum"] = this.lineNum;
 
